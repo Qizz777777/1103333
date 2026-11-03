@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>環保小達人大冒險 - 三大題互動測驗系統 (大字體版)</title>
+  <!-- 引入 p5.js 核心函式庫 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+  <style>
+    /* 讓網頁全螢幕顯示，消除預設邊距與滾動條 */
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #f0f7f4;
+      font-family: "Microsoft JhengHei", Arial, sans-serif;
+    }
+  </style>
+</head>
+<body>
+
+  <script>
+    // ==========================================
+    // 全域變數宣告區
+    // ==========================================
+    let currentPart = 1;          // 目前所在的大題（1: 連連看, 2: GIF圖示選擇題, 3: 綜合選擇題）
+    let scorePart1 = 0;           // 第一大題得分
+    let scorePart2 = 0;           // 第二大題得分
+    let scorePart3 = 0;           // 第三大題得分
+    let totalScore = 0;           // 總得分
+    let submitted = false;        // 是否已經最終交卷
+    let confettiActive = false;   // 是否啟動彩帶特效
+    let confettiParticles = [];   // 彩帶粒子陣列
+
+    // --- 第一大題（連連看）變數 ---
+    let matchPairs = [
+      { id: 1, left: "🌱 減塑生活", right: "自備環保杯與環保袋", selectedLeft: false, matched: false },
+      { id: 2, left: "⚡ 節能減碳", right: "隨手關燈與拔插頭", selectedLeft: false, matched: false },
+      { id: 3, left: "🍎 廚餘回收", right: "菜葉果皮堆肥或養豬", selectedLeft: false, matched: false },
+      { id: 4, left: "🔋 有害垃圾", right: "廢乾電池與日光燈管", selectedLeft: false, matched: false }
+    ];
+    let selectedLeftItem = null;  // 目前左側被選中的項目
+
+    // --- 第二大題（GIF 圖示說明選擇題）變數 ---
+    let part2Questions = [
+      {
+        title: "第二大題 Q1：下列哪一個情境代表正確的『垃圾分類與回收』？",
+        mainEmoji: "♻️",
+        options: [
+          { text: "將寶特瓶沖洗乾淨並投入資源回收桶", correct: true, emoji: "✨" },
+          { text: "把電池和吃剩的便當盒混在一起丟", correct: false, emoji: "🍲" },
+          { text: "將所有塑膠袋通通埋在花園土裡", correct: false, emoji: "🌱" },
+          { text: "把紙類垃圾拿去點火燒掉比較快", correct: false, emoji: "🔥" }
+        ],
+        userSelectionIndex: null
+      },
+      {
+        title: "第二大題 Q2：為了減少碳排放、保護北極熊與冰山，我們應該怎麼做？",
+        mainEmoji: "❄️",
+        options: [
+          { text: "隨手關燈、多搭乘大眾運輸工具", correct: true, emoji: "🚲" },
+          { text: "把冷氣開到最強 16 度並穿外套", correct: false, emoji: "🧥" },
+          { text: "全校每個人都開一台跑車上學", correct: false, emoji: "🏎️" },
+          { text: "房間的電燈二十四小時全開著", correct: false, emoji: "💡" }
+        ],
+        userSelectionIndex: null
+      }
+    ];
+    let currentPart2Index = 0;
+
+    // --- 第三大題（綜合選擇題）變數 ---
+    let allQuestions = [];
+    let quizQuestions = [];
+    let currentQIndex = 0;
+
+    // 介面按鈕 UI
+    let nextPartButton;
+
+    function setup() {
+      // 建立全螢幕且具響應式的 p5.js 畫布
+      let canvas = createCanvas(windowWidth, windowHeight);
+      canvas.style('display', 'block');
+      
+      // 初始化第三大題的題庫
+      initQuestionBank();
+      
+      // 建立導覽按鈕
+      createUIElements();
+    }
+
+    function draw() {
+      // 設定畫布背景顏色（柔和的環保綠白調）
+      background(240, 247, 244);
+
+      // 繪製頂部標題與大題進度導覽
+      drawHeader();
+
+      if (!submitted) {
+        // 根據目前所在的大題繪製對應介面
+        if (currentPart === 1) {
+          drawPart1Interface();
+        } else if (currentPart === 2) {
+          drawPart2Interface();
+        } else if (currentPart === 3) {
+          drawPart3Interface();
+        }
+      } else {
+        // 顯示最終總成績結算與彩帶動畫
+        drawResultInterface();
+        if (confettiActive) {
+          updateAndDrawConfetti();
+        }
+      }
+    }
+
+    // 初始化第三大題選擇題題庫
+    function initQuestionBank() {
+      allQuestions = [
+        {
+          title: "選擇題 1：喝手搖飲料時，為了保護海洋動物，最好使用下列哪一種吸管？",
+          options: [
+            { text: "不鏽鋼或玻璃環保吸管", correct: true },
+            { text: "一次性塑膠吸管", correct: false },
+            { text: "每天換一支新吸管", correct: false },
+            { text: "不用吸管用手撈", correct: false }
+          ],
+          userSelectionIndex: null
+        },
+        {
+          title: "選擇題 2：吃完便當後，免洗餐具（如紙便當盒）在丟掉之前應該怎麼處理？",
+          options: [
+            { text: "簡單沖洗乾淨後再回收", correct: true },
+            { text: "直接跟廚餘混在一起丟", correct: false },
+            { text: "塞進口袋帶回家", correct: false },
+            { text: "用火燒掉比較快", correct: false }
+          ],
+          userSelectionIndex: null
+        },
+        {
+          title: "選擇題 3：下列哪一種能源是屬於『再生能源』，不會污染空氣？",
+          options: [
+            { text: "太陽能與風力發電", correct: true },
+            { text: "燃燒生煤發電", correct: false },
+            { text: "使用石油汽油發電", correct: false },
+            { text: "火力發電廠發電", correct: false }
+          ],
+          userSelectionIndex: null
+        },
+        {
+          title: "選擇題 4：夏天在家裡吹冷氣時，既涼爽又省電環保的溫度建議設定在幾度？",
+          options: [
+            { text: "26 到 28 度，並搭配電風扇", correct: true },
+            { text: "開到最強的 16 度穿外套", correct: false },
+            { text: "把冷氣機拆開來吹冰塊", correct: false },
+            { text: "不用開冷氣直接開暖氣", correct: false }
+          ],
+          userSelectionIndex: null
+        },
+        {
+          title: "選擇題 5：下列哪一種動物常常因為誤食海洋中的塑膠袋而導致生命危險？",
+          options: [
+            { text: "海龜與許多海洋鳥類", correct: true },
+            { text: "陸地上的長頸鹿", correct: false },
+            { text: "住在沙漠的駱駝", correct: false },
+            { text: "高山上的大貓熊", correct: false }
+          ],
+          userSelectionIndex: null
+        }
+      ];
+      quizQuestions = shuffle([...allQuestions]);
+    }
+
+    // 建立導覽與交卷按鈕 (按鈕文字與尺寸加大)
+    function createUIElements() {
+      nextPartButton = createButton('下一大題 ➡');
+      nextPartButton.position(width / 2 - 85, height - 90);
+      nextPartButton.style('padding', '14px 32px');
+      nextPartButton.style('font-size', '20px');
+      nextPartButton.style('font-weight', 'bold');
+      nextPartButton.style('background-color', '#2d6a4f');
+      nextPartButton.style('color', 'white');
+      nextPartButton.style('border', 'none');
+      nextPartButton.style('border-radius', '10px');
+      nextPartButton.style('cursor', 'pointer');
+      nextPartButton.style('box-shadow', '0 4px 8px rgba(0,0,0,0.15)');
+      
+      nextPartButton.mousePressed(() => {
+        if (!submitted) {
+          if (currentPart === 1) {
+            currentPart = 2;
+          } else if (currentPart === 2) {
+            if (currentPart2Index < part2Questions.length - 1) {
+              currentPart2Index++;
+            } else {
+              currentPart = 3;
+            }
+          } else if (currentPart === 3) {
+            if (currentQIndex < quizQuestions.length - 1) {
+              currentQIndex++;
+            } else {
+              // 到第三大題結尾，準備總交卷
+              calculateTotalScore();
+              submitted = true;
+              nextPartButton.hide();
+            }
+          }
+        }
+      });
+    }
+
+    // 繪製頂部標題與大題導覽說明 (字體放大)
+    function drawHeader() {
+      fill(27, 67, 50);
+      noStroke();
+      textAlign(CENTER, CENTER);
+      textSize(32); // 標題字體加大至 32
+      text("🌍 環保小達人大冒險 - 三大題闖關系統", width / 2, 40);
+      
+      textSize(18); // 指引字體加大至 18
+      fill(82, 121, 111);
+      let partTitle = "";
+      if (currentPart === 1) partTitle = "【第一大題：環保連連看】（點擊左側項目，再點擊右側對應項目配對）";
+      else if (currentPart === 2) partTitle = `【第二大題：GIF 動畫圖示選擇題】（第 ${currentPart2Index + 1} / ${part2Questions.length} 題）`;
+      else if (currentPart === 3) partTitle = `【第三大題：環保知識選擇題】（第 ${currentQIndex + 1} / ${quizQuestions.length} 題）`;
+      
+      if (submitted) partTitle = "🎉 測驗全部完成！總成績結算中";
+      text(partTitle, width / 2, 80);
+    }
+
+    // ==========================================
+    // 第一大題：連連看 介面與邏輯繪製 (卡片與字體加大)
+    // ==========================================
+    let matchBoxesLeft = [];
+    let matchBoxesRight = [];
+
+    function drawPart1Interface() {
+      let startY = 170;
+      let boxW = 300; // 卡片寬度加大
+      let boxH = 75;  // 卡片高度加大
+
+      matchBoxesLeft = [];
+      matchBoxesRight = [];
+
+      textSize(18); // 說明文字加大
+      fill(45, 106, 79);
+      textAlign(CENTER, CENTER);
+      text("請將左側的環保名詞，點擊配對到右側正確的說明敘述！", width / 2, 120);
+
+      for (let i = 0; i < matchPairs.length; i++) {
+        let p = matchPairs[i];
+        let bx = width / 2 - 320;
+        let by = startY + i * 95;
+
+        rectMode(CENTER);
+        if (p.matched) {
+          fill(216, 243, 220);
+          stroke(40, 167, 69);
+          strokeWeight(2);
+        } else if (selectedLeftItem === p) {
+          fill(209, 231, 255);
+          stroke(13, 110, 253);
+          strokeWeight(3);
+        } else {
+          fill(255);
+          stroke(183, 228, 199);
+          strokeWeight(2);
+        }
+        rect(bx, by, boxW, boxH, 12);
+
+        fill(45, 55, 72);
+        noStroke();
+        textSize(20); // 左側選項文字加大至 20
+        text(p.left, bx, by);
+
+        matchBoxesLeft.push({ item: p, x: bx - boxW/2, y: by - boxH/2, w: boxW, h: boxH });
+      }
+
+      let shuffledRight = [...matchPairs].sort((a, b) => a.id - b.id);
+      for (let i = 0; i < shuffledRight.length; i++) {
+        let p = shuffledRight[i];
+        let bx = width / 2 + 320;
+        let by = startY + i * 95;
+
+        rectMode(CENTER);
+        if (p.matched) {
+          fill(216, 243, 220);
+          stroke(40, 167, 69);
+          strokeWeight(2);
+        } else {
+          fill(255);
+          stroke(183, 228, 199);
+          strokeWeight(2);
+        }
+        rect(bx, by, boxW, boxH, 12);
+
+        fill(45, 55, 72);
+        noStroke();
+        textSize(19); // 右側說明文字加大至 19
+        text(p.right, bx, by);
+
+        matchBoxesRight.push({ item: p, x: bx - boxW/2, y: by - boxH/2, w: boxW, h: boxH });
+      }
+    }
+
+    // ==========================================
+    // 第二大題：GIF 圖示說明選擇題 介面與邏輯繪製 (字體加大)
+    // ==========================================
+    let part2OptionBoxes = [];
+
+    function drawPart2Interface() {
+      let q = part2Questions[currentPart2Index];
+
+      // 上方提示區塊
+      fill(255);
+      stroke(183, 228, 199);
+      strokeWeight(2.5);
+      rectMode(CENTER);
+      
+      let boxWidth = min(width * 0.88, 850);
+      let boxHeight = 160;
+      let boxX = width / 2;
+      let boxY = 180;
+      rect(boxX, boxY, boxWidth, boxHeight, 15);
+
+      // 動態圖示加大
+      textSize(42);
+      textAlign(CENTER, CENTER);
+      text(q.mainEmoji, boxX, boxY - 40);
+
+      // 題目文字加大至 21
+      fill(45, 106, 79);
+      noStroke();
+      textSize(21);
+      text(q.title, boxX, boxY + 25);
+
+      // 下方 4 個選項按鈕（2行2列）
+      let startX = width / 2 - 230;
+      let startY = 300;
+      let spacingX = 460;
+      let spacingY = 90;
+
+      part2OptionBoxes = [];
+
+      for (let i = 0; i < q.options.length; i++) {
+        let opt = q.options[i];
+        let col = i % 2;
+        let row = floor(i / 2);
+        
+        let optX = startX + col * spacingX;
+        let optY = startY + row * spacingY;
+        let optW = 430; // 選項框寬度加大
+        let optH = 68;  // 選項框高度加大
+
+        rectMode(CENTER);
+        if (q.userSelectionIndex === i) {
+          fill(216, 243, 220);
+          stroke(45, 106, 79);
+          strokeWeight(3);
+        } else {
+          fill(255);
+          stroke(183, 228, 199);
+          strokeWeight(2);
+        }
+        rect(optX, optY, optW, optH, 10);
+
+        fill(45, 55, 72);
+        noStroke();
+        textSize(18); // 選項文字加大至 18
+        textAlign(CENTER, CENTER);
+        text(opt.emoji + " " + opt.text, optX, optY);
+
+        part2OptionBoxes.push({
+          index: i,
+          x: optX - optW / 2,
+          y: optY - optH / 2,
+          w: optW,
+          h: optH
+        });
+      }
+    }
+
+    // ==========================================
+    // 第三大題：選擇題 介面與邏輯繪製 (字體加大)
+    // ==========================================
+    let part3OptionBoxes = [];
+
+    function drawPart3Interface() {
+      let q = quizQuestions[currentQIndex];
+
+      // 上方題目框
+      fill(255);
+      stroke(183, 228, 199);
+      strokeWeight(2.5);
+      rectMode(CENTER);
+      
+      let boxWidth = min(width * 0.88, 850);
+      let boxHeight = 140;
+      let boxX = width / 2;
+      let boxY = 170;
+      rect(boxX, boxY, boxWidth, boxHeight, 15);
+
+      fill(45, 106, 79);
+      noStroke();
+      textSize(21); // 題目文字加大至 21
+      textAlign(CENTER, CENTER);
+      text(q.title, boxX, boxY);
+
+      // 下方 4 個選項按鈕（2行2列）
+      let startX = width / 2 - 230;
+      let startY = 290;
+      let spacingX = 460;
+      let spacingY = 90;
+
+      part3OptionBoxes = [];
+
+      for (let i = 0; i < q.options.length; i++) {
+        let opt = q.options[i];
+        let col = i % 2;
+        let row = floor(i / 2);
+        
+        let optX = startX + col * spacingX;
+        let optY = startY + row * spacingY;
+        let optW = 430;
+        let optH = 68;
+
+        rectMode(CENTER);
+        if (q.userSelectionIndex === i) {
+          fill(216, 243, 220);
+          stroke(45, 106, 79);
+          strokeWeight(3);
+        } else {
+          fill(255);
+          stroke(183, 228, 199);
+          strokeWeight(2);
+        }
+        rect(optX, optY, optW, optH, 10);
+
+        fill(45, 55, 72);
+        noStroke();
+        textSize(18); // 選項文字加大至 18
+        textAlign(CENTER, CENTER);
+        text((i + 1) + ". " + opt.text, optX, optY);
+
+        part3OptionBoxes.push({
+          index: i,
+          x: optX - optW / 2,
+          y: optY - optH / 2,
+          w: optW,
+          h: optH
+        });
+      }
+    }
+
+    // ==========================================
+    // 滑鼠互動事件總監聽
+    // ==========================================
+    function mousePressed() {
+      if (submitted) return;
+
+      if (currentPart === 1) {
+        // 第一大題連連看點擊判定
+        for (let b of matchBoxesLeft) {
+          if (mouseX > b.x && mouseX < b.x + b.w && mouseY > b.y && mouseY < b.y + b.h) {
+            if (!b.item.matched) selectedLeftItem = b.item;
+          }
+        }
+        for (let b of matchBoxesRight) {
+          if (mouseX > b.x && mouseX < b.x + b.w && mouseY > b.y && mouseY < b.y + b.h) {
+            if (selectedLeftItem && selectedLeftItem.id === b.item.id) {
+              selectedLeftItem.matched = true;
+              b.item.matched = true;
+              scorePart1 += 25; // 4題共100分
+            }
+            selectedLeftItem = null;
+          }
+        }
+      } 
+      else if (currentPart === 2) {
+        // 第二大題 GIF 選擇題點擊判定
+        let q = part2Questions[currentPart2Index];
+        for (let box of part2OptionBoxes) {
+          if (mouseX > box.x && mouseX < box.x + box.w && mouseY > box.y && mouseY < box.y + box.h) {
+            q.userSelectionIndex = box.index;
+          }
+        }
+      }
+      else if (currentPart === 3) {
+        // 第三大題選擇題點擊判定
+        let q = quizQuestions[currentQIndex];
+        for (let box of part3OptionBoxes) {
+          if (mouseX > box.x && mouseX < box.x + box.w && mouseY > box.y && mouseY < box.y + box.h) {
+            q.userSelectionIndex = box.index;
+          }
+        }
+      }
+    }
+
+    // 計算總成績
+    function calculateTotalScore() {
+      // 計算第二大題分數 (共2題)
+      let p2CorrectCount = 0;
+      for (let q of part2Questions) {
+        if (q.userSelectionIndex !== null && q.options[q.userSelectionIndex].correct) {
+          p2CorrectCount++;
+        }
+      }
+      scorePart2 = (p2CorrectCount / part2Questions.length) * 100;
+
+      // 計算第三大題分數
+      let p3CorrectCount = 0;
+      for (let q of quizQuestions) {
+        if (q.userSelectionIndex !== null && q.options[q.userSelectionIndex].correct) {
+          p3CorrectCount++;
+        }
+      }
+      scorePart3 = (p3CorrectCount / quizQuestions.length) * 100;
+
+      // 總成績平均
+      totalScore = (scorePart1 + scorePart2 + scorePart3) / 3;
+
+      if (totalScore > 60) {
+        confettiActive = true;
+        initConfetti();
+      }
+    }
+
+    // 繪製總成績與彩帶結果介面 (字體加大)
+    function drawResultInterface() {
+      fill(255);
+      stroke(183, 228, 199);
+      strokeWeight(3);
+      rectMode(CENTER);
+      
+      let resW = min(width * 0.88, 620);
+      let resH = 340;
+      let resX = width / 2;
+      let resY = height / 2 - 20;
+      
+      rect(resX, resY, resW, resH, 18);
+
+      fill(27, 67, 50);
+      noStroke();
+      textSize(30); // 結算標題加大至 30
+      textAlign(CENTER, CENTER);
+      text("🎉 三大題闖關總成績結算", resX, resY - 115);
+
+      textSize(20); // 成績細節字體加大至 20
+      fill(45, 106, 79);
+      text(`• 第一大題（連連看）：${scorePart1} 分`, resX, resY - 55);
+      text(`• 第二大題（GIF 圖示選擇題）：${scorePart2.toFixed(0)} 分`, resX, resY - 15);
+      text(`• 第三大題（綜合選擇題）：${scorePart3.toFixed(0)} 分`, resX, resY + 25);
+
+      textSize(24); // 總分字體加大至 24
+      fill(27, 67, 50);
+      text(`🏆 最終平均總成績：${totalScore.toFixed(1)} 分`, resX, resY + 75);
+
+      textSize(18); // 評語字體加大至 18
+      if (totalScore > 60) {
+        fill(40, 167, 69);
+        text("太棒了！總成績超過 60%，成功解鎖環保彩帶慶祝特效！🌟", resX, resY + 125);
+      } else {
+        fill(220, 53, 69);
+        text("再加油一下！多複習環保常識就能拿到高分喔！💪", resX, resY + 125);
+      }
+    }
+
+    // 初始化彩帶粒子系統
+    function initConfetti() {
+      confettiParticles = [];
+      for (let i = 0; i < 180; i++) {
+        confettiParticles.push({
+          x: random(width),
+          y: random(-height, 0),
+          size: random(8, 16),
+          color: color(random(40, 100), random(150, 220), random(100, 180)),
+          speedY: random(2, 6),
+          speedX: random(-2, 2),
+          rotation: random(TWO_PI),
+          rotationSpeed: random(0.02, 0.08)
+        });
+      }
+    }
+
+    // 更新並繪製過關彩帶動畫
+    function updateAndDrawConfetti() {
+      noStroke();
+      for (let p of confettiParticles) {
+        push();
+        translate(p.x, p.y);
+        rotate(p.rotation);
+        fill(p.color);
+        rectMode(CENTER);
+        rect(0, 0, p.size, p.size * 0.5, 2);
+        pop();
+
+        p.y += p.speedY;
+        p.x += p.speedX;
+        p.rotation += p.rotationSpeed;
+
+        if (p.y > height) {
+          p.y = random(-50, 0);
+          p.x = random(width);
+        }
+      }
+    }
+
+    // 視窗大小改變時自動調整畫布與按鈕響應
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+      if (nextPartButton) {
+        nextPartButton.position(width / 2 - 85, height - 90);
+      }
+    }
+  </script>
+
+</body>
+</html>
